@@ -1,0 +1,253 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class MonoFluidSystem : MonoBehaviour
+{
+    //우선 해슁 없이 , 접촉(일정 범위안)하고 있는거 충돌 반사각을 평균내서 이동
+
+    private struct SPHParticle
+    {
+        public Vector3 position;
+
+        public Vector3 velocity;
+        public Vector3 Force;
+        public Vector3 Acc;//가속
+
+        public bool IsSleep;
+        public bool IsGround;
+        public int parameterID;
+
+        public GameObject go;
+
+
+
+        public void Init(Vector3 _position, int _parameterID, GameObject _go)
+        {
+            position = _position;
+            parameterID = _parameterID;
+            go = _go;
+
+            velocity = Vector3.zero;
+
+            Force = Vector3.zero;
+            Acc = Vector3.zero;
+            //forceHeading = Vector3.zero;
+            //density = 0.0f;
+            //pressure = 0.0f;
+            IsSleep = false;
+            IsGround = false;
+        }
+        public void Debugging(int index, int Length, string text = "")
+        {
+            /*
+            if (index == Length - 1)//Length - 1
+                Debug.Log(text + " | velocity :" + velocity + " / Force : " + Force 
+                    + " / Acc : " + Acc + "\n Is Sleep : " + IsSleep);*/
+        }
+    }
+    [System.Serializable]
+    private struct SPHParameters
+    {
+        public float particleRadius;
+        public float smoothingRadius;
+        public float restDensity;
+        public float gravityMult;
+        public float particleMass;
+        public float particleViscosity;
+        public float particleDrag;
+    }
+
+    // Consts
+    private static Vector3 GRAVITY = new Vector3(0.0f, -9.81f, 0.0f);//프레임단 -0.08166 이동
+    private const float DT = 0.008333f;//0.0163333f;
+
+    // Properties
+    [Header("Import")]
+    [SerializeField] private GameObject character0Prefab = null;
+    public float SpawnOffset = 0;
+
+    [Header("Parameters")]
+    [SerializeField] private int parameterID = 0;
+    [SerializeField] private SPHParameters[] parameters = null;
+    [SerializeField] float CollsionPush = 25;
+
+    [Header("Properties")]
+    [SerializeField] private int amount = 250;
+    [SerializeField] private int rowSize = 16;
+
+    // Data
+    private SPHParticle[] particles;
+
+    void Start()
+    {
+        InitSPH();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        ComputeForces();
+        ComputeColliders();
+        AddPosition();
+
+        // F = M * A  | A = F / M
+        // 파티클간 충돌(Force) > 단발성 힘(Force) > 지속적인 힘(Acc, Gravity) > 충돌(현제는 바닥만) >> 증감쇄 > 적용(velocity * DT)
+        // 중력은 가속도에 속하지만 질량과 상관없이 같음
+
+        //바닥에 충돌해 바운스 => Force, Acc는 0일때 , 처음에 Acc에 반사 속력을 주고 > velo += (Acc - Gravity) * DT 
+        //    > Acc -= Acc * (1 - drag) * DT
+        // Force는 단발성힘 (파티클간 충돌, 유저입력), Acc는 (바운스, 바람), Velocity는 결과
+
+        //--------- 겹치는거 가능하면 이상태도 좋은데 , 대신 안 쌓임
+        
+        //파티클간의 충돌을 Force을 주는게 아닌 , 속도를 그냥 주면?
+
+        
+    }
+
+    private void InitSPH()
+    {
+        particles = new SPHParticle[amount];
+
+        for (int i = 0; i < amount; i++)
+        {
+            float jitter = (Random.value * 2f - 1f) * parameters[parameterID].particleRadius * 0.1f;
+            float x = (i % rowSize) * (1 + SpawnOffset) + Random.Range(-0.1f, 0.1f);
+            float y = 2 + (i / rowSize) / rowSize * 1.1f * (1 + SpawnOffset);
+            float z = ((i / rowSize) % rowSize) * (1 + SpawnOffset) + Random.Range(-0.1f, 0.1f);
+
+            GameObject go = Instantiate(character0Prefab, gameObject.transform);
+            go.transform.localScale = Vector3.one * parameters[parameterID].particleRadius;
+            go.transform.position = new Vector3(x + jitter, y, z + jitter) + gameObject.transform.position;
+            go.name = "char" + i.ToString();
+
+            particles[i].Init(new Vector3(x, y, z) + gameObject.transform.position, parameterID, go);
+        }
+    }
+
+    void ComputeForces()
+    {
+        for (int i = 0; i < particles.Length; i++)
+        {
+            Vector3 forceDir = Vector3.zero;
+            int CollisionCount = 0;
+
+            for (int j = 0; j < particles.Length; j++)
+            {
+                if (i == j) continue;
+
+
+                Vector3 rij = particles[j].position - particles[i].position;
+                float r2 = rij.sqrMagnitude;
+                float r = Mathf.Sqrt(r2);
+
+                if (r < parameters[particles[i].parameterID].smoothingRadius)
+                {
+                    CollisionCount++;
+
+                    forceDir += -rij.normalized * Mathf.Pow(10, Mathf.Lerp(2, 1, r / (parameters[particles[i].parameterID].particleRadius * 0.5f)));
+                }
+
+                //particles[i].Collision = (CollisionCount > 0);
+
+                //if (particles[i].IsGround == false)
+                {
+                    if (CollisionCount > 0)
+                    {
+                        particles[i].Debugging(i, particles.Length, "Collision + Ground : " + particles[i].IsGround);
+
+                        particles[i].Force = forceDir;
+                        //.normalized * parameters[particles[i].parameterID].particleRadius * 0.5f;
+                        
+                    }
+
+                    // ++++ 유저 Force 추가
+                }
+            }
+        }
+    }
+    private void ComputeColliders()
+    {
+        for (int i = 0; i < particles.Length; i++)
+        {
+
+            if (particles[i].go.transform.position.y <= parameters[particles[i].parameterID].particleRadius * 0.5f)
+            {
+                if (particles[i].IsSleep == false)
+                    particles[i].Debugging(i, particles.Length, "Floor");
+
+
+                if (particles[i].IsGround == false)
+                {
+                    particles[i].velocity = -GRAVITY * DT;
+
+                    if (particles[i].velocity.sqrMagnitude < 0.1f)//------------- 바닥과 충돌인데 다음에도 내려갈려는경우 멈추기
+                    {
+                        particles[i].IsSleep = true;
+                        particles[i].Debugging(i, particles.Length, "Sleep");
+                    }//움직임 중지
+                }else
+                {
+                    if (Mathf.Abs(Vector3.Dot(particles[i].velocity, Vector3.down)) < 90 * Mathf.Deg2Rad)
+                    {
+                        particles[i].IsSleep = true;
+                        particles[i].Debugging(i, particles.Length, "Sleep");//velocity가 아래일때
+                    }
+                }
+
+                particles[i].IsGround = true;
+            }
+            else
+            {
+                //particles[i].Debugging(i, particles.Length, " -- ");
+
+                particles[i].IsGround = false;
+            }
+
+
+            if (particles[i].go.transform.position.y <= 0)
+            {
+                particles[i].IsSleep = true;
+            }//움직임 중지
+        }
+    }//============= Intersect 도 수정하기
+    void AddPosition()
+    {
+
+        for (int i = 0; i < particles.Length; i++)
+        {
+            //부하가 걸릴때 DT를 쓰면 느려지고 , Time.deltaTime 프레임을 스킵
+
+            Vector3 velo = Vector3.zero;
+
+            if (particles[i].IsSleep)
+            {
+                particles[i].Acc += (particles[i].Force / parameters[particles[i].parameterID].particleMass) * DT;
+                //particles[i].Acc = (particles[i].Force.normalized * parameters[particles[i].parameterID].particleMass) * DT;
+
+                velo = particles[i].Acc;
+                velo.y = 0;
+
+                particles[i].velocity = velo;
+                particles[i].Acc -= particles[i].Acc * parameters[particles[i].parameterID].particleViscosity * DT;
+                particles[i].Force -= particles[i].Force * parameters[particles[i].parameterID].particleViscosity * DT;
+            }
+            else
+            {
+                particles[i].velocity += (particles[i].Acc + GRAVITY) * DT;//particles[i].Force.normalized * CollsionPush + 
+
+                velo = particles[i].Force + particles[i].velocity;
+
+                particles[i].Acc -= particles[i].Acc * parameters[particles[i].parameterID].particleDrag * DT;
+                particles[i].Force -= particles[i].Force * parameters[particles[i].parameterID].particleViscosity * DT;
+            }
+
+            particles[i].go.transform.position += velo * DT;//Time.deltaTime;
+
+            particles[i].position += velo * DT;//
+                                                         //+= Vector3.Lerp(Vector3.zero, force + velo, DT);
+
+        }
+    }
+}

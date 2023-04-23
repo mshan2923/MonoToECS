@@ -1,0 +1,18 @@
+https://github.com/leonardo-montes/Unity-ECS-Job-System-SPH
+
+2019 버전이라 오류가 너무 많아 재구성
+
+실행하면 여전히 오류가...
+
+그래서 SPHSystem.OnEnable()에 비활성화 함 
+
+
+Boid 알고리즘을 사용하여 물리계산 하는걸로 추정
+	https://www.youtube.com/watch?v=MisUIbvHobk
+	https://m.blog.naver.com/canny708/221558939748
+	https://studyfield.tistory.com/490
+	
+
+https://github.com/Unity-Technologies/EntityComponentSystemSamples
+	유니티 공식 프로젝트에서 EnitiySample.Boid 를 참고
+	+ MergeSharedKeyIndicesJob 스크립스 사용
