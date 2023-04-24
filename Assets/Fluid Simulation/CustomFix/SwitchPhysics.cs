@@ -16,6 +16,7 @@ public class SwitchSPHtypeBaker : Baker<SwitchPhysics>
 {
     public override void Bake(SwitchPhysics authoring)
     {
+        
         AddComponent(new SwitchPhysicsComponent { switchType = authoring.SwitchType });
     }
 }

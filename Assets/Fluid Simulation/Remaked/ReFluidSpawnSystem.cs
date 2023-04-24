@@ -67,8 +67,7 @@ namespace FluidSimulate
         #endregion
 
         BeginInitializationEntityCommandBufferSystem IntiECB;
-        //BeginInitializationEntityCommandBufferSystem
-        //EndInitializationEntityCommandBufferSystem
+
         bool IsSpawn = false;
 
         protected override void OnCreate()
@@ -79,7 +78,6 @@ namespace FluidSimulate
         }
         protected override void OnUpdate()
         {
-            //IntiECB = World.GetOrCreateSystemManaged<BeginInitializationEntityCommandBufferSystem>();
 
             if (IsSpawn)
             {

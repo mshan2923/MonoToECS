@@ -266,7 +266,7 @@ namespace FluidSimulate
                 };
                 PositionSetupHandle = PositionSetupJob.ScheduleParallel(ParticleGroup, Dependency);
                 PositionSetupHandle.Complete();
-
+                
                 var tempData = ParticleGroup.ToComponentDataArray<FluidSimlationComponent>(Allocator.Temp);
                 if (tempData.Length <= 0)
                 {
@@ -290,6 +290,7 @@ namespace FluidSimulate
                 timer += SystemAPI.Time.DeltaTime;
             }
 
+            #region 변수 설정
             NativeArray<FluidSimlationComponent> particleData =
                 ParticleGroup.ToComponentDataArray<FluidSimlationComponent>(Allocator.TempJob);
 
@@ -307,7 +308,9 @@ namespace FluidSimulate
 
             JobHandle SetupMergedHandle = JobHandle.CombineDependencies(PositionSetupHandle, particleDirJobHandle, particleMoveResJobHandle);
             //------
+            #endregion
 
+            #region CalculationJob
             ResetAcc ResetAccJob = new ResetAcc
             {
                 particleData = particleData,
@@ -368,6 +371,7 @@ namespace FluidSimulate
             //Dependency = ApplyPositionHandle;
 
             Debugging(particleData, particleDir, particleMoveRes,"End");
+            #endregion
 
             particleData.Dispose();
             particleDir.Dispose();

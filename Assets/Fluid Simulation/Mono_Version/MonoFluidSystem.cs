@@ -9,37 +9,6 @@ public class MonoFluidSystem : MonoBehaviour
 {
     //우선 해슁 없이 , 접촉(일정 범위안)하고 있는거 충돌 반사각을 평균내서 이동
 
-    public class HashMap
-    {
-        public List<int> Key;
-        public List<int> Value;
-
-        public HashMap(int Capacity = 0)
-        {
-            Key = new List<int>(Capacity);
-            Value = new List<int>(Capacity);
-        }
-
-        public void Add(int key, int value)
-        {
-            Key.Add(key);
-            Value.Add(value);
-        }
-        public void AddHash( Vector3 pos, float radius, int value)
-        {
-            Add(GridHash.Hash(pos, radius), value);
-        }
-        public bool TryGetFirstValue(int key, out int value)
-        {
-            value = Key.Find(t => key == t);
-            return value >= 0;
-        }
-        public bool TryGetValue(int key, out List<int> values)
-        {
-            values = Key.FindAll(t => key == t);
-            return values.Count > 0;
-        }
-    }
     private struct SPHParticle
     {
         public Vector3 position;
@@ -159,13 +128,8 @@ public class MonoFluidSystem : MonoBehaviour
     }
     #endregion
 
+    #region 변수
     // Consts
-    private static readonly int[] cellOffsetTable =
-{
-        1, 1, 1, 1, 1, 0, 1, 1, -1, 1, 0, 1, 1, 0, 0, 1, 0, -1, 1, -1, 1, 1, -1, 0, 1, -1, -1,
-        0, 1, 1, 0, 1, 0, 0, 1, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, -1, 1, 0, -1, 0, 0, -1, -1,
-        -1, 1, 1, -1, 1, 0, -1, 1, -1, -1, 0, 1, -1, 0, 0, -1, 0, -1, -1, -1, 1, -1, -1, 0, -1, -1, -1
-    };
     private static Vector3 GRAVITY = new Vector3(0.0f, -9.81f, 0.0f);//프레임단 -0.08166 이동
     private const float DT = 0.008333f;//0.0163333f;
 
@@ -202,13 +166,11 @@ public class MonoFluidSystem : MonoBehaviour
     // Data
     private SPHParticle[] particles;
     GameObject[] particleObj;
-    HashMap hashMap;
+    #endregion
 
     void Start()
     {
         InitSPH();
-
-        hashMap = new HashMap(amount);
     }
 
     // Update is called once per frame
@@ -231,7 +193,7 @@ public class MonoFluidSystem : MonoBehaviour
 
                         MoveResistance += Mathf.Clamp01(Vector3.Dot(-ij.normalized, -(particles[i].velocity + particles[i].Acc * DT).normalized));
                     }
-                }
+                }// dir , MoveResistance 계산 -> 충돌 노멀값 , 이동 저항값 계산
 
                 {
                     if (particles[i].position.y <= parameters[parameterID].particleRadius * 0.5f)
@@ -350,76 +312,4 @@ public class MonoFluidSystem : MonoBehaviour
         }
     }
 
-
-
-    void HashPositions()
-    {
-        for (int index = 0; index < particles.Length; index++)
-        {
-            hashMap.AddHash(particles[index].position, parameters[parameterID].particleRadius, index);
-
-
-            //====================
-
-            /*
-            Unity.Mathematics.int3 gridOffset;
-            int hash;
-            Unity.Mathematics.int3 gridPosition = GridHash.Quantize(particles[index].position, parameters[parameterID].particleRadius);
-
-            for (int oi = 0; oi < 27; oi++)
-            {
-                int i = oi * 3;
-                gridOffset = new Unity.Mathematics.int3(cellOffsetTable[i], cellOffsetTable[i + 1], cellOffsetTable[i + 2]);
-                hash = GridHash.Hash(gridPosition + gridOffset);
-                hashMap.TryGetValue(hash, out var values);
-
-                for (int j = 0; j < values.Count; j++)
-                {
-
-                }
-            }//==== GC
-            */
-        }
-
-        {
-            var LhashMap = new NativeParallelMultiHashMap<int, int>(amount, Allocator.TempJob);//NativeMultiHashMap<int, int>(amount, Allocator.TempJob);
-            var ParticleData = new NativeArray<SPHParticle>(particles, Allocator.TempJob);
-            var SumForces = new NativeArray<float3>(amount, Allocator.TempJob);
-            var SumPenetrat = new NativeArray<float3>(amount, Allocator.TempJob);
-
-            var HashPosJob = new HashPosition
-            {
-                datas = ParticleData,
-                Radius = parameters[parameterID].particleRadius,
-                hashMap = LhashMap.AsParallelWriter()
-            };
-            var FindNeighborsJob = new FindNeighbors
-            {
-                hashMap = LhashMap,
-                datas = ParticleData,
-                cellOffsetTable = new NativeArray<int>(cellOffsetTable, Allocator.TempJob),
-                Radius = parameters[parameterID].particleRadius,
-                Forces = SumForces,
-                Penetration = SumPenetrat
-                
-            };
-            var SetForceJob = new SetForce
-            {
-                datas = ParticleData,
-                Forces = SumForces,
-                Penetration = SumPenetrat
-            };
-
-            var HashPosHandle = HashPosJob.Schedule(amount, rowSize);
-            var FindHandle = FindNeighborsJob.Schedule(amount, rowSize, HashPosHandle);
-            var SetForceHandle = SetForceJob.Schedule(amount, rowSize, FindHandle);
-            SetForceHandle.Complete();
-
-            particles = ParticleData.ToArray();
-            //particles은 변화X , ParticleData == FindNeighborsJob.datas
-            print(particles[0].position + " / " + particles[0].Force
-                + " / " + ParticleData[0].Force + " / " + FindNeighborsJob.datas[0].Force);
-            //Debug.DrawLine(particles[0].position, particles[0].position + particles[0].Force, Color.black);
-        }
-    }
 }
