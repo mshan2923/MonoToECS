@@ -39,10 +39,10 @@ namespace FluidSimulate.WaterFall
 
         partial struct GetDisableEntity : IJobParallelFor
         {
-            [Unity.Collections.LowLevel.Unsafe.NativeDisableUnsafePtrRestriction]
+            [Unity.Collections.LowLevel.Unsafe.NativeDisableUnsafePtrRestriction] //EntityQuery를 사용하기 위해서 사용 , 동기화 문제 감수 하고 사용
             public EntityQuery entityQuery;
             public NativeArray<Entity> entities;
-            public NativeParallelMultiHashMap<int, Entity>.ParallelWriter DisabledEntity;
+            public NativeParallelMultiHashMap<int, Entity>.ParallelWriter DisabledEntity; // 병렬쓰기 , 읽기 불가
 
             public void Execute(int index)
             {
@@ -122,7 +122,7 @@ namespace FluidSimulate.WaterFall
                     var temp = new FluidSimlationComponent();
                     temp.position = trans.Position;
                     temp.velocity = velocity;
-                    ECB.SetComponent(index, vaule, temp);// 물리효과 키고 쓰면 사라짐 , 끄면 그대로 있고...
+                    ECB.SetComponent(index, vaule, temp);
 
                     var tempPos = trans;
                     tempPos.Scale = 0.25f;
@@ -140,8 +140,6 @@ namespace FluidSimulate.WaterFall
                     }
                 }
 
-                //SpawnedEntity.ContainsKey(index)
-                //SpawnedEntity.TryGetValue(index, out Entity temp);
             }
         }
 
@@ -188,11 +186,6 @@ namespace FluidSimulate.WaterFall
                                 {
                                     var instance = ecb.Instantiate(entityInQueryIndex, manager.particle);
 
-                                    /*
-                                    var position = new float3((i % size) * 1.2f + random.NextFloat(-0.1f, 0.1f) * manager.RandomPower,
-                                        0 + (i / size / size) * 1.2f,
-                                        ((i / size) % size) * 1.2f + random.NextFloat(-0.1f, 0.1f) * manager.RandomPower) + transform.Position;*/
-
                                     var position = new float3(random.NextFloat(-1f, 1f), random.NextFloat(-1f, 1f), random.NextFloat(-1f, 1f)) * manager.RandomPower + transform.Position;
 
                                     var Ltrans = new LocalTransform
@@ -203,9 +196,8 @@ namespace FluidSimulate.WaterFall
                                     };
 
                                     ecb.SetComponent(entityInQueryIndex, instance, Ltrans);
-                                    ecb.AddComponent(entityInQueryIndex, instance, new SpawnedTag());
-                                    //ecb.SetComponent(entityInQueryIndex, instance, new FluidSimlationComponent());
-                                    //ecb.SetEnabled(entityInQueryIndex, instance, false);
+                                    ecb.AddComponent(entityInQueryIndex, instance, new SpawnedTag());//구별용 으로 쓰이고 , 청크에 공간 차지 하지 않는다.
+
                                 }
                             }).ScheduleParallel();
 
@@ -221,7 +213,6 @@ namespace FluidSimulate.WaterFall
                         if (entities.Length == 0)
                         {
                             entities = ParticlesQuery.ToEntityArray(Allocator.Persistent);
-                            //Manager = SystemAPI.GetSingleton<WaterFallSpawnComponent>();
                         }
 
                         SetEnableAll setEnableJob = new SetEnableAll
@@ -251,6 +242,8 @@ namespace FluidSimulate.WaterFall
                         };
                         var GetDisabledHandle = DisabledEntityJob.Schedule(entities.Length, 64, Dependency);
                         GetDisabledHandle.Complete();
+
+                        //Entities.Foreach() 로 쓸수 있지만 , 비활성화된 엔티티는 EntityQuery에서 찾지 못함
 
 
                         var manager = SystemAPI.GetSingleton<WaterFallSpawnComponent>();
@@ -293,9 +286,9 @@ namespace FluidSimulate.WaterFall
                             ReturnPoolHandle.Complete();
                         }// Retrun Pool
 
-                        DisabledEntity.Dispose();//할당 해제 하니까 프레임  늘어났는데?
+                        DisabledEntity.Dispose();//할당 해제 하니까 프레임 늘어남
                         break;
-                    }
+                    }//case SpawnWorkType.Spawning
 
             }//End Switch
         }
